@@ -261,7 +261,7 @@ export default function AccountsPage() {
                       No available keys. Generate a key first on the Keys page.
                     </p>
                   ) : (
-                    <Select value={selectedKeyId} onValueChange={setSelectedKeyId}>
+                    <Select value={selectedKeyId} onValueChange={(v) => setSelectedKeyId(v ?? "")}>
                       <SelectTrigger>
                         <SelectValue placeholder="Choose a key..." />
                       </SelectTrigger>
