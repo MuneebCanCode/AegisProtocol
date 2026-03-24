@@ -1,0 +1,6 @@
+{
+  "app": "npx ts-node bin/aegis-infra.ts",
+  "context": {
+    "@aws-cdk/core:stackName": "AegisProtocolStack"
+  }
+}

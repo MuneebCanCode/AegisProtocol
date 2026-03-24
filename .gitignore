@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Environment files - ignore secrets, keep examples
+aegis-backend/.env
+aegis-frontend/.env.local
+
+# Kiro specs
+.kiro/
+
+# VS Code
+.vscode/
+
+# Next.js
+.next/
+out/
+
+# Build outputs
+dist/
+build/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# CDK
+cdk.out/
+
+# Markdown docs (except README)
+*.md
+!README.md
+!**/README.md
+
+# Lock files are fine, but ignore package manager caches
+.npm
+.yarn
+
+# Misc
+*.log

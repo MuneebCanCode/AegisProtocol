@@ -1,0 +1,312 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum KeyStatus {
+  ACTIVE
+  PENDING_DELETION
+  DELETED
+  ROTATED
+}
+
+enum AccountStatus {
+  ACTIVE
+  DELETED
+}
+
+enum GuardianStatus {
+  ACTIVE
+  REVOKED
+}
+
+enum AuditCategory {
+  KEY_LIFECYCLE
+  SIGNING_EVENTS
+  ACCESS_EVENTS
+  GUARDIAN_EVENTS
+  POLICY_EVENTS
+  COMPLIANCE_EVENTS
+}
+
+enum DmsStatus {
+  ACTIVE
+  TRIGGERED
+  DISABLED
+}
+
+enum InsuranceStatus {
+  ACTIVE
+  EXPIRED
+  CLAIMED
+}
+
+enum TokenType {
+  FUNGIBLE
+  NFT
+}
+
+// ─── Models ──────────────────────────────────────────────────────────────────
+
+model User {
+  id                String               @id @default(uuid())
+  email             String               @unique
+  password          String
+  name              String?
+  recoveryThreshold Int                  @default(2)
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  managedKeys       ManagedKey[]
+  hederaAccounts    HederaAccount[]
+  guardianAssignments GuardianAssignment[] @relation("UserGuardianAssignments")
+  guardedBy         GuardianAssignment[] @relation("GuardianUserAssignments")
+  transactions      Transaction[]
+  policies          Policy[]
+  deadmanSwitches   DeadmanSwitch[]
+  allowances        Allowance[]
+  insurancePolicies InsurancePolicy[]
+  stakingInfos      StakingInfo[]
+  proposals         Proposal[]
+  votes             Vote[]
+}
+
+model ManagedKey {
+  id              String           @id @default(uuid())
+  userId          String
+  kmsKeyArn       String           @unique
+  kmsKeyAlias     String
+  publicKey       String
+  status          KeyStatus        @default(ACTIVE)
+  healthScore     Int              @default(100)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  user            User             @relation(fields: [userId], references: [id])
+  hederaAccount   HederaAccount?
+  rotationRecords RotationRecord[]
+}
+
+model HederaAccount {
+  id           String        @id @default(uuid())
+  userId       String
+  accountId    String        @unique
+  alias        String?
+  managedKeyId String        @unique
+  balance      Float         @default(0)
+  status       AccountStatus @default(ACTIVE)
+  hashscanUrl  String
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id])
+  managedKey   ManagedKey    @relation(fields: [managedKeyId], references: [id])
+}
+
+model GuardianAssignment {
+  id              String         @id @default(uuid())
+  userId          String
+  guardianUserId  String
+  role            String
+  weight          Int            @default(1)
+  status          GuardianStatus @default(ACTIVE)
+  nftSerial       Int?
+  hashscanUrl     String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  user            User           @relation("UserGuardianAssignments", fields: [userId], references: [id])
+  guardian        User           @relation("GuardianUserAssignments", fields: [guardianUserId], references: [id])
+}
+
+model Transaction {
+  id            String   @id @default(uuid())
+  userId        String
+  type          String
+  amount        Float?
+  fromAccountId String?
+  toAccountId   String?
+  transactionId String?
+  hashscanUrl   String?
+  status        String   @default("PENDING")
+  details       Json?
+  createdAt     DateTime @default(now())
+
+  user          User     @relation(fields: [userId], references: [id])
+}
+
+model RotationRecord {
+  id            String     @id @default(uuid())
+  managedKeyId  String
+  oldKmsKeyArn  String
+  newKmsKeyArn  String
+  transactionId String?
+  hashscanUrl   String?
+  createdAt     DateTime   @default(now())
+
+  managedKey    ManagedKey @relation(fields: [managedKeyId], references: [id])
+}
+
+model Policy {
+  id                   String   @id @default(uuid())
+  userId               String
+  maxTransactionAmount Float
+  dailyLimit           Float
+  whitelistedAccounts  String[]
+  businessHoursOnly    Boolean  @default(false)
+  startHour            Int?
+  endHour              Int?
+  contractId           String?
+  hashscanUrl          String?
+  isActive             Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  user                 User     @relation(fields: [userId], references: [id])
+}
+
+model AuditLog {
+  id             String        @id @default(uuid())
+  eventType      String
+  category       AuditCategory
+  actor          String
+  target         String
+  details        Json
+  kmsKeyId       String?
+  signature      String?
+  topicId        String?
+  transactionId  String?
+  hashscanUrl    String?
+  sequenceNumber Int?
+  createdAt      DateTime      @default(now())
+}
+
+model DeadmanSwitch {
+  id                    String    @id @default(uuid())
+  userId                String
+  inactivityTimeoutDays Int
+  recoveryAccountId     String
+  transferAmount        Float
+  sourceAccountId       String
+  scheduleId            String?
+  lastHeartbeat         DateTime  @default(now())
+  status                DmsStatus @default(ACTIVE)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  user                  User      @relation(fields: [userId], references: [id])
+}
+
+model Allowance {
+  id               String   @id @default(uuid())
+  userId           String
+  ownerAccountId   String
+  spenderAccountId String
+  amount           Float
+  tokenId          String?
+  expiresAt        DateTime?
+  scheduleId       String?
+  isActive         Boolean  @default(true)
+  transactionId    String?
+  hashscanUrl      String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user             User     @relation(fields: [userId], references: [id])
+}
+
+model InsurancePolicy {
+  id              String          @id @default(uuid())
+  userId          String
+  premiumAmount   Float
+  coverageAmount  Float
+  coverageLevel   String?
+  contractId      String?
+  status          InsuranceStatus @default(ACTIVE)
+  expiresAt       DateTime?
+  transactionId   String?
+  hashscanUrl     String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  user            User            @relation(fields: [userId], references: [id])
+}
+
+model StakingInfo {
+  id               String    @id @default(uuid())
+  userId           String
+  accountId        String
+  stakedNodeId     Int?
+  stakedAccountId  String?
+  stakeAmount      Float     @default(0)
+  stakePeriodStart DateTime?
+  pendingReward    Float     @default(0)
+  isActive         Boolean   @default(false)
+  transactionId    String?
+  hashscanUrl      String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user             User      @relation(fields: [userId], references: [id])
+}
+
+model HcsTopicConfig {
+  id          String        @id @default(uuid())
+  category    AuditCategory @unique
+  topicId     String        @unique
+  memo        String
+  hashscanUrl String
+  createdAt   DateTime      @default(now())
+}
+
+model TokenConfig {
+  id          String    @id @default(uuid())
+  name        String
+  tokenId     String    @unique
+  type        TokenType
+  hashscanUrl String
+  createdAt   DateTime  @default(now())
+}
+
+model Proposal {
+  id               String   @id @default(uuid())
+  creatorId        String
+  title            String
+  description      String
+  options          String[]
+  votingEndsAt     DateTime
+  status           String   @default("ACTIVE")
+  results          Json?
+  hcsTransactionId String?
+  hashscanUrl      String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  creator          User     @relation(fields: [creatorId], references: [id])
+  votes            Vote[]
+}
+
+model Vote {
+  id               String   @id @default(uuid())
+  proposalId       String
+  userId           String
+  option           String
+  weight           Float
+  hcsTransactionId String?
+  hashscanUrl      String?
+  createdAt        DateTime @default(now())
+
+  proposal         Proposal @relation(fields: [proposalId], references: [id])
+  user             User     @relation(fields: [userId], references: [id])
+
+  @@unique([proposalId, userId])
+}
